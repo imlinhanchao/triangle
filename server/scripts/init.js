@@ -4,7 +4,7 @@ const readline = require('readline');
 const { v4: uuidv4 } = require('uuid');
 let config = require(
     fs.existsSync(path.join(__dirname, '..', 'config.json')) ?
-    '../config' : '../cfg'
+        '../config' : '../cfg'
 );
 
 const randomStr = () => randomUp(Math.random().toString(36).substr(2));
@@ -38,15 +38,10 @@ async function main() {
     }
     config.base['port'] = parseInt(await rl.inputData('Port', config.base['port']));
     config.base['domain'] = await rl.inputData('Domain', `http://localhost:${config.base['port']}`);
-    config.base['preview_url'] = await rl.inputData('Preview Domain', `http://preview.local:${config.base['port']}`);
-    config.base['preview_domain'] = new URL(config.base['preview_url']).hostname;
-
     config.base['name'] = await rl.inputData('Website Name', config.base['name']);
-    config.base['glot'] = await rl.inputData('Glot Token', config.base['glot']);
-    config.base['cnzz'] = await rl.inputData('CNZZ Site Id', config.base['cnzz']);
-    
+
     config.file['maxSize'] = await rl.inputData('Max Size File Upload(MB)', config.file['maxSize']);
-    
+
     console.info('Config Database:');
 
     config.db['port'] = parseInt(await rl.inputData('Database Port', config.db['port']));
@@ -72,11 +67,11 @@ async function main() {
             else {
                 // Save DB Config
                 fs.writeFile(path.join(__dirname, '../model/config.json'),
-                JSON.stringify(dbConfig, null, 4),
-                (err) => {
-                    if (err) console.error(`[Error] Save db config failed: ${err.message}`);
-                    else initDB();
-                });        
+                    JSON.stringify(dbConfig, null, 4),
+                    (err) => {
+                        if (err) console.error(`[Error] Save db config failed: ${err.message}`);
+                        else initDB();
+                    });
             }
         });
     rl.close();
@@ -84,7 +79,7 @@ async function main() {
     fs.mkdir(path.join(__dirname, '..', 'public', 'dist'))
 }
 
-function initDB () {
+function initDB() {
     (async () => {
         const model = require('../model');
         try {
@@ -92,7 +87,7 @@ function initDB () {
             console.info('[Success] Init all model finish.');
             console.info('[Info] Please execute \'npm run build\' to build frontend, and then execute \'npm start\' to start the website.');
         } catch (err) {
-            console.error(`[Error] Init database model failed: ${err.message}`);                
+            console.error(`[Error] Init database model failed: ${err.message}`);
         }
         process.exit();
     })();
