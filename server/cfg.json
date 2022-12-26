@@ -1,0 +1,31 @@
+{ 
+    "base": {
+        "name": "Web Template",
+        "port": 3000,
+        "domain": "http://localhost:3000",
+        "identityKey": "",
+        "secret": "",
+        "salt": ""
+    },
+    "file": {
+        "upload": "/public/upload/",
+        "fileurl": "/upload/",
+        "maxSize": 2
+    },
+    "mail": {
+        "host": "",
+        "port": 465,
+        "secure": true,
+        "auth": {
+            "user": "",
+            "pass": ""
+        }
+    },
+    "db": {
+        "database": "code",
+        "dialect": "mysql",
+        "prefix": "code_",
+        "port": 3306,
+        "logging": false
+    }
+}
