@@ -1,15 +1,15 @@
-const nodemailer = require('nodemailer');
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
-const model = require('../model');
-const App = require('./app');
+import nodemailer from 'nodemailer';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import model from '../model';
+import config from '../config.json';
+import App from './app';
 const Account = model.account;
 const Token = model.token;
-const config = require('../config.json');
 
-const __salt = config.salt;
-const __tpl = {
+const __salt = config.base.salt;
+const __tpl:any = {
     verify: {
         data: '',
         path: path.join(__dirname, '..', 'assets', 'verify_mail.html')
@@ -20,7 +20,7 @@ const __tpl = {
     }
 };
 
-let __error__ = Object.assign({
+const __error__ = Object.assign({
     verify: App.error.reg('帐号或密码错误！'),
     captcha: App.error.reg('验证码错误！'),
     existed: App.error.existed('帐号'),
@@ -33,17 +33,19 @@ let __error__ = Object.assign({
 }, App.error);
 
 class Module extends App {
-    constructor(session) {
-        super([
-            { fun: App.ok, name: 'oklogin', msg: '登录成功' },
-            { fun: App.ok, name: 'oklogout', msg: '登出成功' },
-            { fun: App.ok, name: 'okget', msg: '获取成功' },
-            { fun: App.ok, name: 'oksend', msg: '发送成功' },
-            { fun: App.ok, name: 'okverify', msg: '验证成功' },
-        ]);
+    session:any
+    saftKey: string[];
+    constructor(session:any) {
+        super({ 
+          login: '登录成功',
+          logout: '登出成功',
+          get: '获取成功' ,
+          send: '发送成功' ,
+          verify: '验证成功' ,
+        });
         this.session = session;
         this.name = '用户';
-        this.saftKey = ['id'].concat(Account.keys().filter(k => ['passwd'].indexOf(k) < 0));
+        this.saftKey = ['id'].concat(Account.keys().filter((k:string) => ['passwd'].indexOf(k) < 0));
     }
 
     get error() {
@@ -56,7 +58,7 @@ class Module extends App {
         }
     }
 
-    async login(data) {
+    async login(data:any) {
         const keys = ['username', 'passwd'];
 
         if (!App.haskeys(data, keys)) {
@@ -74,12 +76,12 @@ class Module extends App {
         data = App.filter(data, keys);
 
         try {
-            let account = await this.exist(data.username, true);
+            const account = await this.exist(data.username, true);
             if (!account) {
                 throw this.error.verify;
             } else {
-                let sha256 = crypto.createHash('sha256');
-                let passwd = sha256.update(data.passwd + __salt).digest('hex');
+                const sha256 = crypto.createHash('sha256');
+                const passwd = sha256.update(data.passwd + __salt).digest('hex');
                 if (account.passwd != passwd) {
                     throw this.error.verify;
                 }
@@ -89,14 +91,14 @@ class Module extends App {
             account.save();
 
             this.session.account_login = account;
-            return this.oklogin(App.filter(this.session.account_login, this.saftKey));
-        } catch (err) {
+            return this.ok.login(App.filter(this.session.account_login, this.saftKey));
+        } catch (err:any) {
             if (err.isdefine) throw (err);
             throw (this.error.network(err));
         }
     }
 
-    async create(data, onlyData = false) {
+    async create(data:any, onlyData = false) {
         const keys = ['username', 'passwd', 'email'];
 
         if (!App.haskeys(data, keys)) {
@@ -110,7 +112,7 @@ class Module extends App {
                 throw this.error.captcha;
 
             if (data.email) {
-                let account = await Account.findOne({
+                const account = await Account.findOne({
                     where: {
                         email: data.email
                     }
@@ -122,7 +124,7 @@ class Module extends App {
 
             data.nickname = data.username;
             data.lastlogin = new Date().valueOf() / 1000;
-            let sha256 = crypto.createHash('sha256');
+            const sha256 = crypto.createHash('sha256');
             data.passwd = sha256.update(data.passwd + __salt).digest('hex');
             data.email = data.email || '';
             data.motto = data.motto || '';
@@ -131,18 +133,18 @@ class Module extends App {
             data.location = data.location || '';
             data.url = data.url || '';
             data.verify = false;
-            let account = await super.new(data, Account, 'username');
+            const account = await super.new(data, Account, 'username');
             if (onlyData) return account;
 
             this.sendverify({ email: data.email, username: data.username });
-            return this.okcreate(App.filter(account, this.saftKey));
-        } catch (err) {
+            return this.ok.create(App.filter(account, this.saftKey));
+        } catch (err:any) {
             if (err.isdefine) throw (err);
             throw (this.error.db(err));
         }
     }
 
-    async update(data) {
+    async update(data:any) {
         const keys = ['username'];
 
         if (!App.haskeys(data, keys)) {
@@ -152,7 +154,7 @@ class Module extends App {
         data = App.filter(data, Account.keys().concat(['id', 'oldpasswd']));
 
         try {
-            let account = await this.info(true, Account.keys());
+            const account = await this.info(true, Account.keys());
             if (account.username != data.username) {
                 throw this.error.limited;
             }
@@ -160,7 +162,7 @@ class Module extends App {
             data.username = undefined;
             if (data.passwd) {
                 let sha256 = crypto.createHash('sha256');
-                let passwd = sha256.update(data.oldpasswd + __salt).digest('hex');
+                const passwd = sha256.update(data.oldpasswd + __salt).digest('hex');
                 if (account.passwd != passwd) {
                     throw this.error.verify;
                 }
@@ -170,7 +172,7 @@ class Module extends App {
 
             // Mail 更新重复检查
             if (data.email && data.email != account.email) {
-                let account = await Account.findOne({
+                const account = await Account.findOne({
                     where: {
                         email: data.email
                     }
@@ -186,29 +188,29 @@ class Module extends App {
                 })
             }
 
-            return this.okupdate(App.filter(await super.set(data, Account), this.saftKey));
-        } catch (err) {
+            return this.ok.update(App.filter(await super.set(data, Account), this.saftKey));
+        } catch (err:any) {
             if (err.isdefine) throw (err);
             throw (this.error.db(err));
         }
     }
 
-    async exist(username, onlyData = false) {
+    async exist(username:string, onlyData = false) {
         try {
-            let data = await Account.findOne({
+            const data = await Account.findOne({
                 where: {
                     username: username
                 }
             });
             if (onlyData) return data;
-            return this.okget(!!data);
-        } catch (err) {
+            return this.ok.get(!!data);
+        } catch (err:any) {
             if (err.isdefine) throw (err);
             throw (this.error.db(err));
         }
     }
 
-    async exists(data, onlyData = false) {
+    async exists(data:any, onlyData = false) {
         const keys = ['email', 'phone'];
 
         if (!App.hasone(data, keys)) {
@@ -217,12 +219,12 @@ class Module extends App {
 
         data = App.filter(data, keys);
         try {
-            let account = await Account.findOne({
+            const account = await Account.findOne({
                 where: data
             });
             if (onlyData) return account;
-            return this.okget(!!account);
-        } catch (err) {
+            return this.ok.get(!!account);
+        } catch (err:any) {
             if (err.isdefine) throw (err);
             throw (this.error.db(err));
         }
@@ -233,19 +235,19 @@ class Module extends App {
             throw (this.error.nologin);
         }
         this.session.account_login = undefined;
-        return this.oklogout();
+        return this.ok.logout();
     }
 
     get islogin() {
         return this.session && this.session.account_login;
     }
 
-    async info(onlyData = false, fields = null) {
+    async info(onlyData = false, fields?:string[]) {
         if (!this.islogin) {
             throw (this.error.nologin);
         }
         fields = fields || this.saftKey;
-        let data = await Account.findOne({
+        const data = await Account.findOne({
             where: {
                 username: this.session.account_login.username
             }
@@ -255,11 +257,11 @@ class Module extends App {
         data.save();
 
         if (onlyData == true) return App.filter(data, fields);
-        return this.okget(App.filter(data, fields));
+        return this.ok.get(App.filter(data, fields));
     }
 
-    async avatar(username) {
-        let data = await Account.findOne({
+    async avatar(username:string) {
+        const data = await Account.findOne({
             where: {
                 username
             },
@@ -271,47 +273,47 @@ class Module extends App {
         if (data && data.avatar)
             avatar = path.join(process.cwd(), config.file.upload, data.avatar);
 
-        let buffer = fs.readFileSync(avatar);
+        const buffer = fs.readFileSync(avatar);
         return buffer;
     }
 
-    async query(query, fields = null, onlyData = false) {
-        let ops = {
+    async query(query:any, fields?:string[], onlyData = false) {
+        const ops = {
             id: App.ops.in,
             username: App.ops.in,
         };
         query = App.filter(query, Object.keys(ops));
         try {
-            let data = {
+            const data:any = {
                 index: 0,
                 count: -1,
                 query
             };
             data.fields = fields || this.saftKey.filter(k => ['email', 'phone'].indexOf(k) < 0);
-            let queryData = await super.query(
+            const queryData = await super.querys(
                 data, Account, ops
             );
             if (onlyData) return queryData;
-            return this.okquery(queryData);
+            return this.ok.query(queryData);
         } catch (err) {
             throw (err);
         }
     }
 
-    async sendverify(data) {
+    async sendverify(data:any) {
         const keys = ['username', 'email'];
 
         if (!App.haskeys(data, keys)) {
             throw (this.error.param);
         }
         try {
-            let account = await this.info(true);
+            const account = await this.info(true);
             if (account.username != data.username) {
                 throw this.error.limited;
             }
 
-            let sha256 = crypto.createHash('sha256');
-            let token = sha256.update(data.email + new Date().getTime() + __salt).digest('hex');
+            const sha256 = crypto.createHash('sha256');
+            const token = sha256.update(data.email + new Date().getTime() + __salt).digest('hex');
 
             // clear history token
             await Token.destroy({
@@ -322,22 +324,22 @@ class Module extends App {
 
             await super.new({ username: data.username, token }, Token, 'username');
 
-            let transporter = nodemailer.createTransport(config.mail);
+            const transporter = nodemailer.createTransport(config.mail);
 
-            let info = await transporter.sendMail({
+            const info = await transporter.sendMail({
                 from: `"${config.base.name}" <${config.mail.auth.user}>`, // sender address
                 to: data.email,
                 subject: `[${config.base.name}] Please verify your email address`, // Subject line
                 html: this.__makemail({ ...account, token, domain: config.base.domain }, 'verify'), // html body
             });
 
-            return this.oksend(info);
+            return this.ok.send(info);
         } catch (err) {
             throw (err);
         }
 
     }
-    async verify(data) {
+    async verify(data:any) {
         const keys = ['username', 'token'];
 
         if (!App.haskeys(data, keys)) {
@@ -345,20 +347,20 @@ class Module extends App {
         }
 
         try {
-            let token = await Token.findOne({
+            const token = await Token.findOne({
                 where: {
                     username: data.username,
                     token: data.token
                 }
             })
 
-            let yesterday = new Date();
-            yesterday = yesterday.setDate(yesterday.getDate() - 1) / 1000;
-            if (!token || token.create_time < yesterday) {
+            const yesterday = new Date();
+            const yesterdayTime = yesterday.setDate(yesterday.getDate() - 1) / 1000;
+            if (!token || token.create_time < yesterdayTime) {
                 throw (this.error.notverify)
             }
 
-            let account = await Account.findOne({
+            const account = await Account.findOne({
                 where: { username: data.username }
             })
             account.verify = true;
@@ -370,7 +372,7 @@ class Module extends App {
                 }
             });
 
-            return this.okverify(data.username);
+            return this.ok.verify(data.username);
         } catch (err) {
             throw (err);
         }
@@ -383,7 +385,7 @@ class Module extends App {
         return this.session.account_login;
     }
 
-    __makemail(data, type) {
+    __makemail(data:any, type:string) {
         let tpl = '';
         if (!__tpl[type].data) {
             __tpl[type].data = fs.readFileSync(__tpl[type].path).toString();
@@ -391,7 +393,7 @@ class Module extends App {
         tpl = __tpl[type].data;
 
         Object.keys(data).forEach(k => {
-            let value = data[k];
+            const value = data[k];
             tpl = tpl.replace(new RegExp(`{{${k}}}`, 'g'), value);
         })
         return tpl;

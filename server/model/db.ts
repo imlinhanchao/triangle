@@ -1,8 +1,8 @@
-const Sequelize = require('sequelize');
-const config = require('./config');
-var sequelize = new Sequelize(config.database, config.user, config.password, {
+import { Sequelize, UUID, UUIDV4, INTEGER, Dialect } from 'sequelize';
+import config from './config.json';
+const sequelize = new Sequelize(config.database, config.user, config.password, {
     host: config.host,
-    dialect: config.dialect,
+    dialect: config.dialect as Dialect,
     port: config.port,
     logging: config.logging,
     pool: {
@@ -11,18 +11,18 @@ var sequelize = new Sequelize(config.database, config.user, config.password, {
         idle: 10000
     }
 });
-const ID_TYPE = Sequelize.UUID;
-function defineModel(name, attributes, defineAttr = {}) {
-    var attrs = {};
+const ID_TYPE = UUID;
+export function defineModel(name:string, attributes:any, defineAttr = {}) {
+    const attrs :any = {};
     if (!attributes.id) {
         attrs.id = {
             type: ID_TYPE,
-            defaultValue: Sequelize.UUIDV4,
+            defaultValue: UUIDV4,
             primaryKey: true
         };
     }
-    for (let key in attributes) {
-        let value = attributes[key];
+    for (const key in attributes) {
+        const value = attributes[key];
         if (typeof value === 'object' && value['type']) {
             value.allowNull = value.allowNull || false;
             attrs[key] = value;
@@ -34,17 +34,17 @@ function defineModel(name, attributes, defineAttr = {}) {
         }
     }
     attrs.create_time = {
-        type: Sequelize.INTEGER,
+        type: INTEGER,
     };
     attrs.update_time = {
-        type: Sequelize.INTEGER,
+        type: INTEGER,
     };
     return sequelize.define(name, attrs, Object.assign(defineAttr, {
         tableName: name,
         timestamps: false,
         hooks: {
-            beforeCreate: function (obj) {
-                let now = (new Date()).valueOf() / 1000;
+            beforeCreate: function (obj:any) {
+                const now = (new Date()).valueOf() / 1000;
                 if (obj.isNewRecord) {
                     obj.create_time = now;
                     obj.update_time = now;
@@ -52,9 +52,9 @@ function defineModel(name, attributes, defineAttr = {}) {
                     obj.update_time = now;
                 }
             },
-            beforeBulkCreate: function (records) {
-                let now = (new Date()).valueOf() / 1000;
-                for (let i in records) {
+            beforeBulkCreate: function (records:any) {
+              const now = (new Date()).valueOf() / 1000;
+                for (const i in records) {
                     if (records[i].isNewRecord) {
                         records[i].create_time = now;
                         records[i].update_time = now;
@@ -63,8 +63,8 @@ function defineModel(name, attributes, defineAttr = {}) {
                     }
                 }
             },
-            beforeUpdate: function (obj) {
-                let now = (new Date()).valueOf() / 1000;
+            beforeUpdate: function (obj:any) {
+                const now = (new Date()).valueOf() / 1000;
                 if (obj.isNewRecord) {
                     obj.create_time = now;
                     obj.update_time = now;
@@ -75,28 +75,25 @@ function defineModel(name, attributes, defineAttr = {}) {
         }
     }));
 }
-const TYPES = ['STRING', 'INTEGER', 'BIGINT', 'TEXT', 'DOUBLE', 'DATE', 'ENUM',
-    'DATEONLY', 'BOOLEAN', 'NOW', 'fn', 'col'
-];
-var exp = {
-    defineModel: defineModel,
-    sync: async () => {
-        // only allow create ddl in non-production environment:
-        if (process.env.NODE_ENV !== 'production') {
-            await sequelize.sync({
-                force: true
-            });
-        } else {
-            throw new Error('Cannot sync() when NODE_ENV is set to \'production\'.');
-        }
+
+export async function sync () {
+    // only allow create ddl in non-production environment:
+    if (process.env.NODE_ENV !== 'production') {
+        await sequelize.sync({
+            force: true
+        });
+    } else {
+        throw new Error('Cannot sync() when NODE_ENV is set to \'production\'.');
     }
-};
-for (let type of TYPES) {
-    exp[type] = Sequelize[type];
 }
-exp.ID = ID_TYPE;
-exp.bitOp = (field, op, val, eq) => {
+export const ID = ID_TYPE;
+export const bitOp = (field:string, op:string, val:string, eq:any) => {
     return sequelize.where(sequelize.literal(`${field} ${op} ${val}`), eq);
 };
-exp.Op = Sequelize.Op;
-module.exports = exp;
+
+import * as SequelizeModule from 'sequelize';
+export default SequelizeModule;
+
+export interface dbModel extends SequelizeModule.ModelCtor<any> {
+  keys?: string[];
+}

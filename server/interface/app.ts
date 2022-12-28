@@ -1,7 +1,21 @@
-const Op = require('../model/db').Op;
+import db, { dbModel } from '../model/db';
 
-class AppError extends Error {
-    constructor(state, message, data) {
+interface IDBQuery { 
+    where: any, 
+    order: any[], 
+    attributes?:any[], 
+    offset?:number, 
+    limit?:number 
+}
+
+export class AppError extends Error {
+
+    state: number;
+    msg: string;
+    data: any;
+    isdefine: boolean;
+
+    constructor(state:number, message:string, data?:any) {
         super(message);
         this.state = state;
         this.msg = message;
@@ -17,6 +31,7 @@ class AppError extends Error {
             data: this.data || '',
         };
     }
+    
     toJSON() {
         return {
             state: this.state,
@@ -27,51 +42,60 @@ class AppError extends Error {
 }
 
 class App {
-    constructor(rsps = []) {
+    name: string;
+    ok: { 
+        [key:string]: (data?:any) => {
+            state: number;
+            msg: string;
+            data?: any;
+        } 
+    } = {};
+    
+    constructor(rsps:{ [key:string]: string } = {}) {
         this.name = '';
-        rsps = rsps.concat([
-            { fun: App.ok, name: 'okquery', msg: '查询成功' },
-            { fun: App.ok, name: 'okcreate', msg: '创建成功' },
-            { fun: App.ok, name: 'okupdate', msg: '更新成功' },
-            { fun: App.ok, name: 'okdelete', msg: '删除成功' },
-        ]);
-
-        for (let i in rsps) {
-            let rsp = rsps[i];
-            this[rsp.name] = function (data=undefined) {
-                return rsp.fun(rsp.msg, data, true);
-            };
-        }
+        const ok = Object.assign(rsps, { 
+            query: '查询成功' ,
+            create: '创建成功',
+            update: '更新成功',
+            delete: '删除成功', 
+        });
+        Object.keys(ok).forEach(o => {
+            this.ok[o] = (data:any) => App.ok(ok[o], data, true);
+        })
     }
 
+    // async ok(type:string, data:any) {
+    //     return App.ok(this.oks[type], data, true)
+    // }
+
     // 通用统计接口
-    async count(data, Model, ops, field='id') {
-        let keys = Model.keys();
+    async count(data: any, Model:dbModel, ops:any, field='id') {
+        let keys = Model.keys || [];
 
         keys = ['id'].concat(keys).concat(['create_time', 'update_time']);
         
         data = data || {};
         
         // 生成查询条件
-        let q = { where: {} };
+        const q:any = { where: {} };
         data = App.filter(data, keys);
         q.where = App.where(data, ops);
         q.group = field;
 
-        let total = 0;
+        let total:any = 0;
         try {
-            q.attributes = [[Model.db.fn('COUNT', Model.db.col(field)), 'count'], field];
+            q.attributes = [[db.fn('COUNT', db.col(field)), 'count'], field];
             total = await Model.findAll(q); // 获取总数
             return total;
-        } catch (err) {
+        } catch (err:any) {
             if (err.isdefine) throw (err);
             throw (App.error.db(err));
         }
     }
 
     // 通用查询接口
-    async query(data, Model, ops) {
-        let keys = Model.keys();
+    async querys(data: any, Model:dbModel, ops:any) {
+        let keys = Model.keys || [];
 
         keys = ['id'].concat(keys).concat(['create_time', 'update_time']);
         
@@ -82,19 +106,19 @@ class App {
         data.query = data.query || {};
         
         // 生成查询条件
-        let q = { where: {}, order: [] };
+        const q:IDBQuery = { where: {}, order: [] };
         data.query = App.filter(data.query, keys);
         q.where = App.where(data.query, ops);
 
         // 生成排序，默认以创建时间降序
         data.order = data.order || [];
-        if (!data.order.find(o => o == 'create_time' || o[0] == 'create_time'))
+        if (!data.order.find((o: string | string[]) => o == 'create_time' || o[0] == 'create_time'))
             data.order.push(['create_time', 'DESC']);
         q.order = App.order(data.order, keys);
 
         let datalist = [], total = 0;
         try {
-            q.attributes = [[Model.db.fn('COUNT', Model.db.col('id')), 'total']];
+            q.attributes = [[db.fn('COUNT', db.col('id')), 'total']];
             total = (await Model.findOne(q)).dataValues.total; // 获取总数
 
             q.attributes = undefined;
@@ -103,10 +127,10 @@ class App {
             if (data.count > 0) q.limit = parseInt(data.count);
 
             datalist = await Model.findAll(q);
-            let fields = data.fields || keys;
+            const fields = data.fields || keys;
 
             datalist = datalist.map(d => App.filter(d, fields));
-        } catch (err) {
+        } catch (err:any) {
             if (err.isdefine) throw (err);
             throw (App.error.db(err));
         }
@@ -117,8 +141,8 @@ class App {
     }
 
     // 通用新增接口
-    async new(data, Model, unique = null) {
-        let keys = Model.keys();
+    async new(data: any, Model:dbModel, unique?: string | string[]) {
+        let keys = Model.keys || [];
         
         if (!App.haskeys(data, keys)) {
             throw (App.error.param);
@@ -128,10 +152,10 @@ class App {
 
         try {
             if (unique) {
-                let where = {};
+                const where:any = {};
                 if (typeof unique === 'string') where[unique] = data[unique];
                 else if (unique instanceof Array) unique.forEach(u => where[u] = data[u]);
-                let record = await Model.findOne({
+                const record = await Model.findOne({
                     where: where
                 });
 
@@ -141,19 +165,19 @@ class App {
             }
 
             data.id = undefined;
-            let record = await Model.create(data);
+            const record = await Model.create(data);
 
             keys = ['id'].concat(keys).concat(['create_time', 'update_time']);
             return App.filter(record, keys);
-        } catch (err) {
+        } catch (err:any) {
             if (err.isdefine) throw (err);
             throw (App.error.db(err));
         }
     }
 
     // 通用更新接口
-    async set(data, Model, preUpdate = null, unique = 'id') {
-        let keys = Model.keys();
+    async set(data: any, Model:dbModel, preUpdate:null | ((data:any)=>any) = null, unique = 'id') {
+        let keys = Model.keys || [];
         keys = ['id'].concat(keys).concat(['create_time', 'update_time']);
 
         if (!App.haskeys(data, [unique])) {
@@ -163,7 +187,7 @@ class App {
         data = App.filter(data, keys);
 
         try {
-            let where = {};
+            const where:any = {};
             where[unique] = data[unique];
             let record = await Model.findOne({
                 where: where
@@ -182,15 +206,15 @@ class App {
             } else {
                 throw App.error.limited;
             }
-        } catch (err) {
+        } catch (err:any) {
             if (err.isdefine) throw (err);
-            throw (this.error.db(err));
+            throw (App.error.db(err));
         }
     }
 
     // 通用删除接口
-    async del(data, Model, preDelete = null, unique = 'id') {
-        let keys = [unique];
+    async del(data: any, Model:dbModel, preDelete:null | ((data:any)=>any) = null, unique = 'id') {
+        const keys = [unique];
 
         if (!App.haskeys(data, keys)) {
             throw (App.error.param);
@@ -199,9 +223,9 @@ class App {
         data = App.filter(data, keys);
 
         try {
-            let where = {};
+            const where:any = {};
             where[unique] = data[unique];
-            let record = await Model.findOne({
+            const record = await Model.findOne({
                 where: where
             });
 
@@ -212,19 +236,19 @@ class App {
             if (!preDelete || preDelete(record)) {
                 await record.destroy();
                 return record;
-            } else if (preDelete) {
+            } else {
                 throw App.error.limited;
             }
 
-        } catch (err) {
+        } catch (err:any) {
             if (err.isdefine) throw (err);
-            throw (this.error.db(err));
+            throw (App.error.db(err));
         }
     }
 
     // 过滤对象数据
-    static filter(data, keys, defaultValue) {
-        let d = {};
+    static filter(data: { [key: string]: any }, keys: string[], defaultValue?:any) {
+        const d: { [key: string]: any } = {};
         if (!data) return d;
         for (let i = 0; i < keys.length; i++) {
             if (undefined == data[keys[i]]) {
@@ -239,7 +263,7 @@ class App {
     }
 
     // 检查对象数据，包含检查
-    static haskeys(data, keys) {
+    static haskeys(data: { [key: string]: any }, keys: string[]) {
         if (!data) return false;
         for (let i = 0; i < keys.length; i++) {
             if (undefined == data[keys[i]]) 
@@ -249,7 +273,7 @@ class App {
     }
 
     // 检查对象数据，至少包含检查
-    static hasone(data, keys) {
+    static hasone(data: { [key: string]: any }, keys: string[]) {
         if (!data) return false;
         for (let i = 0; i < keys.length; i++) {
             if (undefined !== data[keys[i]]) 
@@ -259,15 +283,19 @@ class App {
     }
 
     // 检查对象数据，仅包含检查
-    static onlykeys(data, keys) {
+    static onlykeys(data: { [key: string]: any }, keys: string[]) {
         if (!data) return false;
-        for (let key in data) {
+        for (const key in data) {
             if (keys.indexOf(key) < 0) return false;
         }
         return true;
     }
 
-    static isSame(data1, data2, keys = null) {
+    static isSame(
+        data1: { [key: string]: any }, 
+        data2: { [key: string]: any }, 
+        keys: string[] | null = null
+    ) {
         if (keys == null) {
             keys = Array.from(new Set(Object.keys(data1).concat(Object.keys(data2))));
         }
@@ -276,10 +304,14 @@ class App {
     }
 
     // 更新数据到对象
-    static update(oldData, newData, keys, bcreate=false) {
+    static update(
+        oldData: { [key: string]: any }, 
+        newData: { [key: string]: any }, 
+        keys: string[], 
+        isCreate=false) {
         if (!oldData || !newData) throw this.error.param;
         for (let i = 0; i < keys.length; i++) {
-            if (!bcreate && oldData[keys[i]] == undefined) continue;
+            if (!isCreate && oldData[keys[i]] == undefined) continue;
             if (undefined == newData[keys[i]]) continue;
             oldData[keys[i]] = newData[keys[i]];
             if (oldData[keys[i]].replace)
@@ -288,7 +320,7 @@ class App {
         return oldData;
     }
 
-    static where(query, ops) {
+    static where(query:any, ops:any) {
         Object.keys(ops).forEach((key) => {
             if (!query[key] || query[key].op) return;
             query[key] = {
@@ -297,8 +329,8 @@ class App {
             };
         });
 
-        let where = {};
-        for (let k in query) {
+        const where:{ [key:string] : { [key:symbol]: any } } = {};
+        for (const k in query) {
             if ('' === query[k])
                 continue;
             where[k] = this.op(query[k]);
@@ -306,9 +338,9 @@ class App {
         return where;
     }
 
-    static order(order, keys) {
-        let orders = [];
-        for (let k in order) {
+    static order(order:{[key:string]: string | [string, string] }, keys:string[]) {
+        const orders = [];
+        for (const k in order) {
             let orderField = order[k];
             let OrderType = 'ASC';
             if (orderField instanceof Array
@@ -318,7 +350,7 @@ class App {
                 OrderType = orderField[1];
                 orderField = orderField[0];
             }
-            if (keys.indexOf(orderField) < 0) continue;
+            else if (typeof orderField == 'string' && keys.indexOf(orderField) < 0) continue;
             orders.push([orderField, OrderType]);
         }
         return orders;
@@ -340,33 +372,34 @@ class App {
         };
     }
 
-    static op(data) {
-        const ops = {
-            '<=': Op.lte,
-            '>=': Op.gte,
-            '!=': Op.ne,
-            '!$': Op.notLike,
-            '=': Op.eq,
-            '<': Op.lt,
-            '>': Op.gt,
-            '$': Op.like,
-            '<>': Op.between,
-            '!<>': Op.notBetween,
-            '~': Op.in
+    static op(data:{ op:string, val: any }) {
+        const ops: { [key:string]: symbol } = {
+            '<=': db.Op.lte,
+            '>=': db.Op.gte,
+            '!=': db.Op.ne,
+            '!$': db.Op.notLike,
+            '=': db.Op.eq,
+            '<': db.Op.lt,
+            '>': db.Op.gt,
+            '$': db.Op.like,
+            '<>': db.Op.between,
+            '!<>': db.Op.notBetween,
+            '~': db.Op.in
         };
 
-        let operator = Op.eq;
+        let operator = db.Op.eq;
+        let val = '';
         if (data.op && ops[data.op]) {
             operator = ops[data.op];
-            data = data.val;
+            val = data.val;
         }
 
-        let op = {};
-        op[operator] = data;
+        const op:{ [key:symbol]: any } = {};
+        op[operator] = val;
         return op;
     }
 
-    static res(data, msg = '') {
+    static res(data:any, msg = '') {
         return {
             state: 0,
             msg: msg,
@@ -374,7 +407,7 @@ class App {
         };
     }
 
-    static ok(action, data = undefined, customizeTip = false) {
+    static ok(action:string, data?:any, customizeTip = false) {
         return {
             state: 0,
             msg: action + (customizeTip ? '' : '成功！'),
@@ -382,7 +415,7 @@ class App {
         };
     }
 
-    static err(err) {
+    static err(err:AppError) {
         if (err.isdefine) {
             return err;
         } else {
@@ -393,13 +426,13 @@ class App {
     static get error() {
         return {
             __count: 9,
-            init: function (errorCode) {
+            init: function (errorCode:number) {
                 this.__count = errorCode;
             },
-            reg: function (msg, fn = null) {
-                let errorCode = this.__count++;
+            reg: function (msg:string, fn: null | ((data:any) => void) = null) {
+                const errorCode = this.__count++;
                 if (fn) {
-                    return function (data) {
+                    return function (data:any) {
                         return new AppError(
                             errorCode,
                             msg,
@@ -413,7 +446,7 @@ class App {
                     );
                 }
             },
-            existed: function (obj, exist = true, customizeTip = false) {
+            existed: function (obj:string, exist = true, customizeTip = false) {
                 return new AppError(
                     1,
                     obj + (customizeTip ? '' : (exist ? '已存在！' : '不存在！'))
@@ -421,13 +454,13 @@ class App {
             },
             param: new AppError(2, '接口参数错误！'),
             query: new AppError(3, '无效查询条件！'),
-            db: function (err) {
+            db: function (err:string) {
                 return new AppError(
                     4,
                     '数据库错误：' + err
                 );
             },
-            network: function (err) {
+            network: function (err:string) {
                 return new AppError(
                     5,
                     '网络错误：' + err
@@ -445,7 +478,7 @@ class App {
                 8,
                 '你没有登录或登录信息已过期！'
             ),
-            server: function (err, stack) {
+            server: function (err:string, stack?:string) {
                 if (err) console.warn(err);
                 if (stack) console.warn(stack);
                 return new AppError(
@@ -458,4 +491,4 @@ class App {
 }
 
 
-module.exports = App;
+export default App;

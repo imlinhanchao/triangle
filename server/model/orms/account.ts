@@ -1,6 +1,9 @@
-const db = require('../db');
-const prefix = require('../config').prefix;
-let orm = {
+import { default as dbModule } from '../db';
+import { defineModel, dbModel } from '../db'
+import { prefix } from '../config.json';
+
+export const db = dbModule;
+export const orm = {
     username: {
         type: db.STRING(20),
         comment: '登录帐号'
@@ -50,12 +53,11 @@ let orm = {
         comment: '最后登录时间'
     }
 };
-let table_name = prefix + 'account';
-module.exports = db.defineModel(table_name, orm, {
+
+export const tb = prefix + 'account';
+export const keys = Object.keys(orm);
+const Model: dbModel = defineModel(tb, orm, {
     comment: '用户表',
 });
-module.exports.db = db;
-module.exports.tb = table_name;
-module.exports.keys = function () {
-    return Object.keys(orm);
-};
+Model.keys = keys;
+export default Model;
